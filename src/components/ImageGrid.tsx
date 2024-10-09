@@ -29,7 +29,7 @@ const ImageGrid = forwardRef<{ fetchMyImages: () => void }, ImageGridProps>(({ a
       const data = await response.json();
 
       if (data.data && data.data.videos) {
-        await setMyImages(data.data.videos.filter(video => video.status != 1));
+        await setMyImages(data.data.videos.filter((video: { status: number; }) => video.status != 1));
         await onMyImagesCountChange(data.data.videos.length);
 
         // 筛选状态为1的数据id
@@ -38,11 +38,11 @@ const ImageGrid = forwardRef<{ fetchMyImages: () => void }, ImageGridProps>(({ a
           .map((video: any) => video.id)
           .join(',');
 
-        await setMyProcess(prev => ({ ...prev, id: processingIds }));
+        console.log("id为：", processingIds);
 
         // 如果有正在处理的视频，开始轮询
         if (processingIds) {
-          pollProcessingVideos();
+          pollProcessingVideos(processingIds);
         } else{
           setMyProcess(prev => ({ ...prev, id: '' }));
         }
@@ -52,9 +52,12 @@ const ImageGrid = forwardRef<{ fetchMyImages: () => void }, ImageGridProps>(({ a
     }
   };
 
-  const pollProcessingVideos = useCallback(async () => {
-    if(!myProcess.id) return;
-    const pollUrl = 'https://api.1mountain.site/api/proxy/api/multimodal/video/processing?idList='+ myProcess.id +'&device_platform=web&app_id=3001&version_code=22201&uuid=eb389e4e-5305-4d98-9e97-fc8c1a978266&device_id=299362015985942537&os_name=Windows&browser_name=chrome&device_memory=8&cpu_core_num=32&browser_language=zh-CN&browser_platform=Win32&screen_width=2560&screen_height=1440&unix=1728230686000'; // 请替换为实际的API地址
+  const pollProcessingVideos = useCallback(async (id: any) => {
+    const processingIds = id;
+    console.log("MyProcess为：", myProcess.id);
+    if(!processingIds) return;
+
+    const pollUrl = 'https://api.1mountain.site/api/proxy/api/multimodal/video/processing?idList='+ processingIds +'&device_platform=web&app_id=3001&version_code=22201&uuid=eb389e4e-5305-4d98-9e97-fc8c1a978266&device_id=299362015985942537&os_name=Windows&browser_name=chrome&device_memory=8&cpu_core_num=32&browser_language=zh-CN&browser_platform=Win32&screen_width=2560&screen_height=1440&unix=1728230686000'; // 请替换为实际的API地址
     const pollHeaders = {
       'Token': 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJleHAiOjE3MzE2ODczMDcsInVzZXIiOnsiaWQiOiIyOTkzNjIwMTYyMDQwNTQ1MjkiLCJuYW1lIjoi5bCP6J665bi9NDUyOSIsImF2YXRhciI6Imh0dHBzOi8vY2RuLnlpbmdzaGktYWkuY29tL3Byb2QvdXNlcl9hdmF0YXIvMTcwNjI2NzU5ODg3NTg5OTk1My0xNzMxOTQ1NzA2Njg5NjU4OTZvdmVyc2l6ZS5wbmciLCJkZXZpY2VJRCI6IjI5OTM2MjAxNTk4NTk0MjUzNyIsImlzQW5vbnltb3VzIjp0cnVlfX0.CwdI2QTjAax-Dwz4oQTLTH_hUErBOw2_1WVS6EJ2MZA',
       'Yy': 'd8dea9ba1bd22dcdd215903a5c74a541',
@@ -62,13 +65,17 @@ const ImageGrid = forwardRef<{ fetchMyImages: () => void }, ImageGridProps>(({ a
 
     const pollInterval = setInterval(async () => {
       try {
+        
+        console.log("发出请求：", processingIds);
         const response = await fetch(pollUrl, { method: 'GET', headers: pollHeaders });
         const dataRes = await response.json();
         const data = dataRes.data
 
-        if (data.processing) {
+        if (data.processing && data.videos.length>0) {
           await setMyProcess(prev => ({ ...prev, videos: data.videos }));
         } else {
+          console.log("停止获取状态")
+          await setMyProcess(prev => ({ ...prev, videos: [] }));
           // 如果返回数据为空，结束轮询
           clearInterval(pollInterval);
           // 重新获取我的图片列表
