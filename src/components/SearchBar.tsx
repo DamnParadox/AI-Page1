@@ -2,18 +2,16 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Image, Edit2 } from 'lucide-react';    
     
 interface SearchBarProps {    
-  onAddOrUpdateProcess: (item: { id: string; percent: number }) => void;    
+  onAddOrUpdateProcess: (item: { id: string; percent: number; desc: string }) => void; // 更新类型    
   onRemoveProcess: (id: string) => void;    
   onRefreshMyImages: () => void;    
 }    
     
 const SearchBar: React.FC<SearchBarProps> = ({ onAddOrUpdateProcess, onRemoveProcess, onRefreshMyImages }) => {    
-  const [desc, setDesc] = useState(''); // 保存文本域输入内容    
-  const [generatedId, setGeneratedId] = useState<string | null>(null); // 保存生成的ID    
-  const pollIntervalRef = useRef<NodeJS.Timeout | null>(null); // 保存轮询的定时器引用    
-  const [isGenerating, setIsGenerating] = useState(false); // 保存生成状态
+  const [desc, setDesc] = useState('');    
+  const [generatedId, setGeneratedId] = useState<string | null>(null);    
+  const [isGenerating, setIsGenerating] = useState(false);
     
-  // 处理发送POST请求    
   const handleGenerate = async () => {    
     setIsGenerating(true);
     const url = 'https://api.1mountain.site/api/proxy/api/multimodal/generate/video?device_platform=web&app_id=3001&version_code=22201&uuid=eb389e4e-5305-4d98-9e97-fc8c1a978266&device_id=299362015985942537&os_name=Windows&browser_name=chrome&device_memory=8&cpu_core_num=32&browser_language=zh-CN&browser_platform=Win32&screen_width=2560&screen_height=1440&unix=1728232094000';    
@@ -24,22 +22,23 @@ const SearchBar: React.FC<SearchBarProps> = ({ onAddOrUpdateProcess, onRemovePro
       'Yy': 'd8dea9ba1bd22dcdd215903a5c74a541',    
     };    
     
-    const body = { desc }; // 将文本域的内容作为请求的body    
+    const body = { desc };    
     
     try {    
       const response = await fetch(url, {    
         method: 'POST',    
         headers: headers,    
-        body: JSON.stringify(body), // 将请求体转换为JSON格式    
+        body: JSON.stringify(body),    
       });    
     
-      const data = await response.json();    
+      const dataRes = await response.json();    
+      const data = dataRes.data
     
-      // 打印并保存返回数据中的ID    
       console.log('Response Data:', data);    
       if (data && data.id) {    
         setGeneratedId(data.id);    
-        onRefreshMyImages(); // 刷新 myImages 数据    
+        onAddOrUpdateProcess({ id: data.id, percent: 0, desc, videos: [] });
+        onRefreshMyImages();    
       }    
     } catch (error) {    
       console.error('请求失败:', error);    
@@ -48,9 +47,8 @@ const SearchBar: React.FC<SearchBarProps> = ({ onAddOrUpdateProcess, onRemovePro
     }    
   };    
     
-  // 轮询获取任务状态    
   useEffect(() => {    
-    if (!generatedId) return;    
+    if (!generatedId) return;
     
     const pollStatus = async () => {    
       const url = `https://api.1mountain.site/api/proxy/api/multimodal/video/processing?idList=${generatedId}&device_platform=web&app_id=3001&version_code=22201&uuid=eb389e4e-5305-4d98-9e97-fc8c1a978266&device_id=299362015985942537&os_name=Windows&browser_name=chrome&device_memory=8&cpu_core_num=32&browser_language=zh-CN&browser_platform=Win32&screen_width=2560&screen_height=1440&unix=1728230686000`;    
@@ -69,41 +67,32 @@ const SearchBar: React.FC<SearchBarProps> = ({ onAddOrUpdateProcess, onRemovePro
         const dataRes = await response.json();    
     
         console.log('Processing Data:', dataRes.data);   
-        const data = dataRes; 
-    
+        const data = dataRes.data[0];
+
         if (data && data.percent !== undefined) {    
-          onAddOrUpdateProcess({ id: generatedId, percent: data.percent });    
+          onAddOrUpdateProcess({ id: generatedId, percent: data.percent, desc: desc, videos: data.videos || [] });
         }    
-    
-        if (!data || !data.percent) {    
-          // 如果返回数据为空或没有percent字段，停止轮询    
-          if (pollIntervalRef.current) {    
-            clearInterval(pollIntervalRef.current);    
-            pollIntervalRef.current = null;    
-            onRemoveProcess(generatedId);    
-          }    
+
+        if (!data || data.percent === 100) {    
+          setGeneratedId(null);
+          onRemoveProcess();
+          onRefreshMyImages();
         }    
       } catch (error) {    
         console.error('获取任务状态失败:', error);    
       }    
     };    
     
-    // 开始轮询    
-    pollIntervalRef.current = setInterval(pollStatus, 3000);    
+    const intervalId = setInterval(pollStatus, 3000);    
     
-    // 清理函数    
-    return () => {    
-      if (pollIntervalRef.current) {    
-        clearInterval(pollIntervalRef.current);    
-      }    
-    };    
-  }, [generatedId, onAddOrUpdateProcess, onRemoveProcess]);    
+    return () => clearInterval(intervalId);
+  }, [generatedId, onAddOrUpdateProcess, onRemoveProcess, onRefreshMyImages, desc]);    
     
   return (    
     <div className="relative">    
       <textarea    
         value={desc}    
-        onChange={(e) => setDesc(e.target.value)} // 更新文本域输入    
+        onChange={(e) => setDesc(e.target.value)}    
         placeholder="请描述您生成的视频内容"    
         className="w-full h-[130px] bg-gray-800 rounded-md py-3 px-4 text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-pink-500 resize-none"    
       />    
@@ -111,7 +100,7 @@ const SearchBar: React.FC<SearchBarProps> = ({ onAddOrUpdateProcess, onRemovePro
         <Edit2 size={20} />    
       </button>    
       <button    
-        onClick={handleGenerate} // 点击按钮时发送请求    
+        onClick={handleGenerate}    
         disabled={isGenerating}    
         className={`absolute right-2 bottom-[10px] rounded-md px-3 py-2 flex items-center space-x-1 transition-colors duration-200 ${
           isGenerating ? 'bg-gray-500 cursor-not-allowed' : 'bg-white text-gray-800 hover:bg-gray-200'
