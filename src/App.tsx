@@ -4,7 +4,8 @@ import SearchBar from './components/SearchBar'
 import ImageGrid from './components/ImageGrid'
 
 function App() {
-  const [activeTab, setActiveTab] = useState<'featured' | 'my'>('featured')
+  const [activeTab, setActiveTab] = useState<'featured' | 'my'>('featured');
+  const [myImagesCount, setMyImagesCount] = useState(0);  // 新增状态，用于保存 myImages 的长度
 
   return (
     <div className="min-h-screen bg-gray-900 text-white">
@@ -31,14 +32,14 @@ function App() {
               }`}
               onClick={() => setActiveTab('my')}
             >
-              我的 (1)
+              我的 ({myImagesCount})  {/* 动态展示 myImages 的长度 */}
             </li>
           </ul>
         </nav>
-        <ImageGrid activeTab={activeTab} />
+        <ImageGrid activeTab={activeTab} onMyImagesCountChange={setMyImagesCount} /> {/* 传递回调函数 */}
       </main>
     </div>
-  )
+  );
 }
 
-export default App
+export default App;
